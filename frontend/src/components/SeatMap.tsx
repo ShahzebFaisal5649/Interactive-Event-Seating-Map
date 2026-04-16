@@ -12,9 +12,34 @@ type SeatMapProps = {
   onHighlight: (seat: SeatData | null) => void;
 };
 
-// Canvas drawing constants
-const SEAT_RADIUS = 3;
-const SEAT_GAP = 2;
+// Premium Color Palette Constants
+const COLORS = {
+  AVAILABLE: '#10b981', // Emerald
+  RESERVED: '#64748b',  // Slate
+  HELD: '#8b5cf6',      // Violet
+  SOLD: '#f43f5e',      // Rose
+  SELECTED: '#ffffff',
+  T4_VIP: '#ef4444',    // Red
+  T3_HIGH: '#f59e0b',   // Amber
+  T2_MID: '#06b6d4',    // Cyan
+  T1_LOW: '#6366f1',    // Indigo
+  ACCENT: '#06b6d4',
+  SHADOW: '#0891b2'
+};
+
+const getPriceColor = (price: number) => {
+  if (price >= 250) return COLORS.T4_VIP;
+  if (price >= 210) return COLORS.T3_HIGH;
+  if (price >= 180) return COLORS.T2_MID;
+  return COLORS.T1_LOW;
+};
+
+const getStatusCol = (status: SeatStatus) => {
+  if (status === 'reserved') return COLORS.RESERVED;
+  if (status === 'sold') return COLORS.SOLD;
+  if (status === 'held') return COLORS.HELD;
+  return COLORS.AVAILABLE;
+};
 
 export const SeatMap = memo(function SeatMap({
   sections,
@@ -55,14 +80,12 @@ export const SeatMap = memo(function SeatMap({
       const selected = selectedIdSet.has(seat.id);
       const updated = updatedSeatIdSet.has(seat.id);
       
-      const fill = heatMapEnabled && status === 'available'
-        ? getPriceTierColor(seat.price)
-        : getStatusColor(status);
- 
-      if (seat.id === 'A-1-1') {
-        // Log one seat to verify color resolution in production
-        console.debug('Seat A-1-1 Debug:', { status, fill, heatMapEnabled, selected });
-      }
+      let fill = heatMapEnabled && status === 'available'
+        ? getPriceColor(seat.price)
+        : getStatusCol(status);
+
+      // Failsafe: No black dots
+      if (!fill) fill = COLORS.AVAILABLE;
 
       ctx.beginPath();
       // Draw rounded rectangle for seat
@@ -70,7 +93,7 @@ export const SeatMap = memo(function SeatMap({
       const y = seat.y;
       const w = seat.width;
       const h = seat.height;
-      const r = 3; // Slightly more rounded
+      const r = 3; 
 
       ctx.moveTo(x + r, y);
       ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -81,30 +104,28 @@ export const SeatMap = memo(function SeatMap({
 
       if (selected || updated) {
         ctx.shadowBlur = 12;
-        ctx.shadowColor = '#0891b2'; // Cyan shadow
+        ctx.shadowColor = COLORS.SHADOW;
       } else {
         ctx.shadowBlur = 0;
       }
 
       ctx.fillStyle = fill;
-      ctx.globalAlpha = status !== 'available' ? 0.35 : 1.0; // Slightly more dimmed non-available
+      ctx.globalAlpha = status !== 'available' ? 0.3 : 1.0; 
       ctx.fill();
 
-      if (selected) {
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = '#ffffff'; // Direct white
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
+      // Always draw a subtle stroke to define the seat shape
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = selected ? COLORS.SELECTED : 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = selected ? 1.5 : 0.5;
+      ctx.stroke();
 
       if (updated) {
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = '#06b6d4'; // Direct cyan
+        ctx.strokeStyle = COLORS.ACCENT;
         ctx.lineWidth = 2;
         ctx.stroke();
       }
       
-      // Reset shadow for next seat
       ctx.shadowBlur = 0;
     });
     ctx.restore();
