@@ -76,25 +76,25 @@ export const SeatMap = memo(function SeatMap({
 
       if (selected || updated) {
         ctx.shadowBlur = 12;
-        ctx.shadowColor = 'var(--seat-selected-stroke)';
+        ctx.shadowColor = '#0891b2'; // Cyan shadow
       } else {
         ctx.shadowBlur = 0;
       }
 
       ctx.fillStyle = fill;
-      ctx.globalAlpha = status !== 'available' ? 0.4 : 1.0; // Dimmer non-available
+      ctx.globalAlpha = status !== 'available' ? 0.35 : 1.0; // Slightly more dimmed non-available
       ctx.fill();
 
       if (selected) {
-        ctx.shadowBlur = 0; // Reset shadow for stroke
-        ctx.strokeStyle = 'var(--text-color)';
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#ffffff'; // Direct white
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 
       if (updated) {
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = 'var(--accent-color)';
+        ctx.strokeStyle = '#06b6d4'; // Direct cyan
         ctx.lineWidth = 2;
         ctx.stroke();
       }
