@@ -470,7 +470,7 @@ body, html, #root {
 
 .seat {
   transition: stroke-width 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
-  will-change: stroke-width, opacity, filter;
+  will-change: auto;
 }
 
 .seat-available:hover {

@@ -151,6 +151,18 @@ const SeatMap = memo(function SeatMap({
   onArrowNavigate,
   onHighlight,
 }: SeatMapProps) {
+  const [visibleSeats, setVisibleSeats] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (typeof requestIdleCallback === 'undefined') {
+      setVisibleSeats(new Set(sections.flatMap((s) => s.seats.map((s) => s.id))));
+      return;
+    }
+    requestIdleCallback(() => {
+      setVisibleSeats(new Set(sections.flatMap((s) => s.seats.map((s) => s.id))));
+    });
+  }, [sections]);
+
   return (
     <>
       {sections.map(({ section, seats, width, height }) => (
@@ -164,6 +176,7 @@ const SeatMap = memo(function SeatMap({
           </div>
           <svg viewBox={`0 0 ${width} ${height}`} className="section-map" aria-label={`Section ${section.label}`}>
             {seats.map((seat) => {
+              if (!visibleSeats.has(seat.id)) return null;
               const selected = selectedIdSet.has(seat.id);
               const status = liveStatusMap[seat.id] ?? seat.status;
               const disabled = status !== 'available';
@@ -269,58 +282,75 @@ function App() {
   useEffect(() => {
     if (!liveUpdatesEnabled) return undefined;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.hostname || 'localhost';
-    const port = 4000;
-    const url = `${protocol}://${host}:${port}/ws`;
+    const initWebSocket = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const host = window.location.hostname || 'localhost';
+      const port = 4000;
+      const url = `${protocol}://${host}:${port}/ws`;
 
-    setWsStatus('connecting');
-    let reconnectTimer: number | undefined;
-    const ws = new WebSocket(url);
+      setWsStatus('connecting');
+      let reconnectTimer: number | undefined;
+      const ws = new WebSocket(url);
 
-    ws.onopen = () => {
-      setWsStatus('open');
-      showToast('Live seat updates connected.', 'success');
-    };
+      ws.onopen = () => {
+        setWsStatus('open');
+        showToast('Live seat updates connected.', 'success');
+      };
 
-    ws.onmessage = ({ data }) => {
-      try {
-        const payload = JSON.parse(data.toString()) as { type: string; seatId?: unknown; status?: unknown };
-        const seatId = payload.seatId;
-        const status = payload.status;
-        if (
-          payload.type === 'seat-update' &&
-          typeof seatId === 'string' &&
-          (status === 'available' || status === 'reserved' || status === 'sold' || status === 'held')
-        ) {
-          setLiveStatusMap((prev) => ({ ...prev, [seatId]: status }));
-          setUpdatedSeatIds((current) => Array.from(new Set<string>([seatId, ...current])));
-          if (selectedIdsRef.current.includes(seatId) && status !== 'available') {
-            setSelectedIds((current) => current.filter((id) => id !== seatId));
-            showToast(`${seatId} is no longer available. Removed from selection.`, 'warning');
+      ws.onmessage = ({ data }) => {
+        try {
+          const payload = JSON.parse(data.toString()) as { type: string; seatId?: unknown; status?: unknown };
+          const seatId = payload.seatId;
+          const status = payload.status;
+          if (
+            payload.type === 'seat-update' &&
+            typeof seatId === 'string' &&
+            (status === 'available' || status === 'reserved' || status === 'sold' || status === 'held')
+          ) {
+            setLiveStatusMap((prev) => ({ ...prev, [seatId]: status }));
+            setUpdatedSeatIds((current) => Array.from(new Set<string>([seatId, ...current])));
+            if (selectedIdsRef.current.includes(seatId) && status !== 'available') {
+              setSelectedIds((current) => current.filter((id) => id !== seatId));
+              showToast(`${seatId} is no longer available. Removed from selection.`, 'warning');
+            }
           }
+        } catch {
+          // ignore invalid payload
         }
-      } catch {
-        // ignore invalid payload
-      }
+      };
+
+      ws.onerror = () => {
+        showToast('Live updates connection failed.', 'error');
+      };
+
+      ws.onclose = () => {
+        setWsStatus('closed');
+        showToast('Live updates disconnected.', 'info');
+        if (liveUpdatesEnabled) {
+          reconnectTimer = window.setTimeout(() => setReconnectAttempt((count) => count + 1), 3000);
+        }
+      };
+
+      return () => {
+        ws.close();
+        if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      };
     };
 
-    ws.onerror = () => {
-      showToast('Live updates connection failed.', 'error');
-    };
-
-    ws.onclose = () => {
-      setWsStatus('closed');
-      showToast('Live updates disconnected.', 'info');
-      if (liveUpdatesEnabled) {
-        reconnectTimer = window.setTimeout(() => setReconnectAttempt((count) => count + 1), 3000);
-      }
-    };
-
-    return () => {
-      ws.close();
-      if (reconnectTimer) window.clearTimeout(reconnectTimer);
-    };
+    if (typeof requestIdleCallback !== 'undefined') {
+      let timeoutId: number;
+      const idleCallbackId = requestIdleCallback(() => {
+        const cleanup = initWebSocket();
+        return cleanup;
+      }, { timeout: 5000 });
+      return () => {\n        if (typeof cancelIdleCallback !== 'undefined') cancelIdleCallback(idleCallbackId);
+      };
+    } else {
+      timeoutId = window.setTimeout(() => {
+        initWebSocket();
+      }, 3000);
+      return () => window.clearTimeout(timeoutId);
+    }
   }, [liveUpdatesEnabled, reconnectAttempt, showToast]);
 
   useEffect(() => {
@@ -539,6 +569,13 @@ function App() {
     pinchRef.current = null;
   };
 
+  useEffect(() => {
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(() => {
+        document.body.style.willChange = 'auto';
+      });
+    }
+  }, []);
   return (
     <div className="app-shell">
       {isLoading && <div className="loading-overlay"><div className="loading-spinner"></div></div>}
