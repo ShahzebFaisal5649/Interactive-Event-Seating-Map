@@ -109,7 +109,19 @@ const SeatComponent = ({
   );
 };
 
-const Seat = memo(SeatComponent);
+const Seat = memo(SeatComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.seat === nextProps.seat &&
+    prevProps.selected === nextProps.selected &&
+    prevProps.disabled === nextProps.disabled &&
+    prevProps.fill === nextProps.fill &&
+    prevProps.stroke === nextProps.stroke &&
+    prevProps.updated === nextProps.updated &&
+    prevProps.onToggle === nextProps.onToggle &&
+    prevProps.onArrowNavigate === nextProps.onArrowNavigate &&
+    prevProps.onHighlight === nextProps.onHighlight
+  );
+});
 
 type SectionView = {
   section: typeof venueData.sections[number];

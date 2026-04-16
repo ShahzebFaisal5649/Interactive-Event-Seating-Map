@@ -377,13 +377,13 @@ body, html, #root {
   gap: 20px;
   padding: 20px;
   transform-origin: 0 0;
-  transition: transform 0.15s ease;
   will-change: transform;
 }
 
 .section-map {
   image-rendering: optimizeSpeed;
   shape-rendering: crispEdges;
+  transform: translateZ(0);
 }
 
 .section-card {
