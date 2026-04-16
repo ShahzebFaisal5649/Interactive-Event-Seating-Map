@@ -58,6 +58,11 @@ export const SeatMap = memo(function SeatMap({
       const fill = heatMapEnabled && status === 'available'
         ? getPriceTierColor(seat.price)
         : getStatusColor(status);
+ 
+      if (seat.id === 'A-1-1') {
+        // Log one seat to verify color resolution in production
+        console.debug('Seat A-1-1 Debug:', { status, fill, heatMapEnabled, selected });
+      }
 
       ctx.beginPath();
       // Draw rounded rectangle for seat
