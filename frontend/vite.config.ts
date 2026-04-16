@@ -4,19 +4,20 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: './',
   plugins: [react()],
+  server: {
+    port: 4173,
+  },
   build: {
-    minify: 'terser',
-    treeshake: true,
-    chunkSizeWarningLimit: 1000,
+    target: 'esnext',
+    minify: 'esbuild',
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
+          'vendor-react': ['react', 'react-dom'],
         },
       },
     },
   },
-  server: {
-    port: 4173,
-  },
 });
+

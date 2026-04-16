@@ -1,218 +1,22 @@
-import React, { memo, useEffect, useMemo, useState, useCallback, useRef, type KeyboardEvent } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import venueData from './venue.json';
 import { buildVenueSeats } from './utils.js';
-import type { SeatData, SeatStatus } from './types.js';
+import type { SeatData, SeatStatus, SectionView } from './types.js';
+import { SeatMap } from './components/SeatMap.js';
+import { getSavedSelection, saveSelection } from './utils/storage.js';
 import './styles.css';
 
-const STORAGE_KEY = 'seating-map:selectedSeats';
 const MAX_SELECTION = 8;
 const DEFAULT_ADJACENT = 2;
 
-const getSavedSelection = (): string[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveSelection = (ids: string[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-};
-
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-const getPriceTierColor = (price: number) => {
-  if (price >= 220) return 'var(--price-tier-4)';
-  if (price >= 180) return 'var(--price-tier-3)';
-  if (price >= 140) return 'var(--price-tier-2)';
-  return 'var(--price-tier-1)';
-};
-
-const getStatusColor = (status: SeatStatus) => {
-  switch (status) {
-    case 'reserved':
-      return 'var(--seat-reserved)';
-    case 'sold':
-      return 'var(--seat-sold)';
-    case 'held':
-      return 'var(--seat-held)';
-    default:
-      return 'var(--seat-available)';
-  }
-};
-
-type SeatProps = {
-  seat: SeatData;
-  selected: boolean;
-  disabled: boolean;
-  fill: string;
-  stroke: string;
-  updated: boolean;
-  onToggle: (seat: SeatData) => void;
-  onArrowNavigate: (seat: SeatData, direction: string) => void;
-  onHighlight: (seat: SeatData | null) => void;
-};
-
-const SeatComponent = ({
-  seat,
-  selected,
-  disabled,
-  fill,
-  stroke,
-  updated,
-  onToggle,
-  onArrowNavigate,
-  onHighlight,
-}: SeatProps) => {
-  const label = `${seat.section} Row ${seat.row}, Seat ${seat.number}, ${seat.status}, $${seat.price}`;
-
-  const handleKeyDown = (event: KeyboardEvent<SVGRectElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      if (!disabled) onToggle(seat);
-    }
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
-      event.preventDefault();
-      onArrowNavigate(seat, event.key);
-    }
-  };
-
-  return (
-    <g className="seat-group">
-      <rect
-        id={`seat-${seat.id}`}
-        x={seat.x}
-        y={seat.y}
-        width={seat.width}
-        height={seat.height}
-        rx={3}
-        ry={3}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={selected ? 2 : 1}
-        opacity={disabled ? 0.5 : 1}
-        tabIndex={0}
-        role="button"
-        aria-label={label}
-        aria-pressed={selected}
-        aria-disabled={disabled}
-        onClick={() => !disabled && onToggle(seat)}
-        onKeyDown={handleKeyDown}
-        onFocus={() => onHighlight(seat)}
-        onBlur={() => onHighlight(null)}
-        className={`seat ${selected ? 'seat-selected' : ''} ${disabled ? 'seat-disabled' : 'seat-available'} ${updated ? 'seat-updated' : ''}`}
-      />
-      <title>{label}</title>
-    </g>
-  );
-};
-
-const Seat = memo(SeatComponent, (prevProps, nextProps) => {
-  return (
-    prevProps.seat === nextProps.seat &&
-    prevProps.selected === nextProps.selected &&
-    prevProps.disabled === nextProps.disabled &&
-    prevProps.fill === nextProps.fill &&
-    prevProps.stroke === nextProps.stroke &&
-    prevProps.updated === nextProps.updated &&
-    prevProps.onToggle === nextProps.onToggle &&
-    prevProps.onArrowNavigate === nextProps.onArrowNavigate &&
-    prevProps.onHighlight === nextProps.onHighlight
-  );
-});
-
-type SectionView = {
-  section: typeof venueData.sections[number];
-  seats: SeatData[];
-  width: number;
-  height: number;
-};
-
-type SeatMapProps = {
-  sections: SectionView[];
-  selectedIdSet: Set<string>;
-  liveStatusMap: Record<string, SeatStatus>;
-  heatMapEnabled: boolean;
-  updatedSeatIdSet: Set<string>;
-  onToggle: (seat: SeatData) => void;
-  onArrowNavigate: (seat: SeatData, direction: string) => void;
-  onHighlight: (seat: SeatData | null) => void;
-};
-
-const SeatMap = memo(function SeatMap({
-  sections,
-  selectedIdSet,
-  liveStatusMap,
-  heatMapEnabled,
-  updatedSeatIdSet,
-  onToggle,
-  onArrowNavigate,
-  onHighlight,
-}: SeatMapProps) {
-  const [visibleSeats, setVisibleSeats] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (typeof requestIdleCallback === 'undefined') {
-      setVisibleSeats(new Set(sections.flatMap((s) => s.seats.map((s) => s.id))));
-      return;
-    }
-    requestIdleCallback(() => {
-      setVisibleSeats(new Set(sections.flatMap((s) => s.seats.map((s) => s.id))));
-    });
-  }, [sections]);
-
-  return (
-    <>
-      {sections.map(({ section, seats, width, height }) => (
-        <div key={section.id} className="section-card">
-          <div className="section-head">
-            <div>
-              <strong>{section.label}</strong>
-              <span>{section.rows} rows · {section.seatsPerRow} seats / row</span>
-            </div>
-            <span className="section-pill">Section {section.id}</span>
-          </div>
-          <svg viewBox={`0 0 ${width} ${height}`} className="section-map" aria-label={`Section ${section.label}`}>
-            {seats.map((seat) => {
-              if (!visibleSeats.has(seat.id)) return null;
-              const selected = selectedIdSet.has(seat.id);
-              const status = liveStatusMap[seat.id] ?? seat.status;
-              const disabled = status !== 'available';
-              const fill = heatMapEnabled && status === 'available'
-                ? getPriceTierColor(seat.price)
-                : getStatusColor(status);
-              const stroke = selected ? 'var(--seat-selected-stroke)' : 'transparent';
-              const updated = updatedSeatIdSet.has(seat.id);
-
-              return (
-                <Seat
-                  key={seat.id}
-                  seat={seat}
-                  selected={selected}
-                  disabled={disabled}
-                  fill={fill}
-                  stroke={stroke}
-                  updated={updated}
-                  onToggle={onToggle}
-                  onArrowNavigate={onArrowNavigate}
-                  onHighlight={onHighlight}
-                />
-              );
-            })}
-          </svg>
-        </div>
-      ))}
-    </>
-  );
-});
 
 function App() {
   const allSeats = useMemo(() => buildVenueSeats(venueData), []);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>(getSavedSelection);
   const [highlightedSeat, setHighlightedSeat] = useState<SeatData | null>(null);
+  const [activeSectionId, setActiveSectionId] = useState('A');
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const [heatMapEnabled, setHeatMapEnabled] = useState(false);
@@ -220,15 +24,21 @@ function App() {
   const [liveStatusMap, setLiveStatusMap] = useState<Record<string, SeatStatus>>({});
   const [updatedSeatIds, setUpdatedSeatIds] = useState<string[]>([]);
   const [adjacentCount, setAdjacentCount] = useState(DEFAULT_ADJACENT);
-  const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed' | 'error'>('connecting');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
   const selectedIdsRef = useRef(selectedIds);
   const dragRef = useRef<{ active: boolean; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
   const pinchRef = useRef<{ startDistance: number; startZoom: number } | null>(null);
-  const viewportRef = useRef(viewport);
+  const viewportRef = useRef({ x: 0, y: 0, zoom: 1 });
   const animationFrameRef = useRef<number | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const applyViewportTransform = useCallback(() => {
+    if (!mapContainerRef.current) return;
+    const { x, y, zoom } = viewportRef.current;
+    mapContainerRef.current.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+  }, []);
 
   useEffect(() => {
     saveSelection(selectedIds);
@@ -240,7 +50,9 @@ function App() {
   }, [isDarkMode]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 600);
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 400);
     return () => clearTimeout(timer);
   }, []);
 
@@ -251,6 +63,10 @@ function App() {
     }
   }, [toast]);
 
+  useEffect(() => {
+    applyViewportTransform();
+  }, [applyViewportTransform]);
+
   const sections = useMemo<SectionView[]>(() => {
     return venueData.sections.map((section, sectionIndex) => {
       const seats = allSeats.filter((seat) => seat.sectionIndex === sectionIndex);
@@ -259,6 +75,10 @@ function App() {
       return { section, seats, width, height };
     });
   }, [allSeats]);
+ 
+  const selectedSections = useMemo(() => {
+    return sections.filter(s => s.section.id === activeSectionId);
+  }, [sections, activeSectionId]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const updatedSeatIdSet = useMemo(() => new Set(updatedSeatIds), [updatedSeatIds]);
@@ -282,75 +102,58 @@ function App() {
   useEffect(() => {
     if (!liveUpdatesEnabled) return undefined;
 
-    const initWebSocket = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const host = window.location.hostname || 'localhost';
-      const port = 4000;
-      const url = `${protocol}://${host}:${port}/ws`;
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = window.location.hostname || 'localhost';
+    const port = 4000;
+    const url = `${protocol}://${host}:${port}/ws`;
 
-      setWsStatus('connecting');
-      let reconnectTimer: number | undefined;
-      const ws = new WebSocket(url);
+    setWsStatus('connecting');
+    let reconnectTimer: number | undefined;
+    const ws = new WebSocket(url);
 
-      ws.onopen = () => {
-        setWsStatus('open');
-        showToast('Live seat updates connected.', 'success');
-      };
-
-      ws.onmessage = ({ data }) => {
-        try {
-          const payload = JSON.parse(data.toString()) as { type: string; seatId?: unknown; status?: unknown };
-          const seatId = payload.seatId;
-          const status = payload.status;
-          if (
-            payload.type === 'seat-update' &&
-            typeof seatId === 'string' &&
-            (status === 'available' || status === 'reserved' || status === 'sold' || status === 'held')
-          ) {
-            setLiveStatusMap((prev) => ({ ...prev, [seatId]: status }));
-            setUpdatedSeatIds((current) => Array.from(new Set<string>([seatId, ...current])));
-            if (selectedIdsRef.current.includes(seatId) && status !== 'available') {
-              setSelectedIds((current) => current.filter((id) => id !== seatId));
-              showToast(`${seatId} is no longer available. Removed from selection.`, 'warning');
-            }
-          }
-        } catch {
-          // ignore invalid payload
-        }
-      };
-
-      ws.onerror = () => {
-        showToast('Live updates connection failed.', 'error');
-      };
-
-      ws.onclose = () => {
-        setWsStatus('closed');
-        showToast('Live updates disconnected.', 'info');
-        if (liveUpdatesEnabled) {
-          reconnectTimer = window.setTimeout(() => setReconnectAttempt((count) => count + 1), 3000);
-        }
-      };
-
-      return () => {
-        ws.close();
-        if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      };
+    ws.onopen = () => {
+      setWsStatus('open');
+      showToast('Live seat updates connected.', 'success');
     };
 
-    if (typeof requestIdleCallback !== 'undefined') {
-      let timeoutId: number;
-      const idleCallbackId = requestIdleCallback(() => {
-        const cleanup = initWebSocket();
-        return cleanup;
-      }, { timeout: 5000 });
-      return () => {\n        if (typeof cancelIdleCallback !== 'undefined') cancelIdleCallback(idleCallbackId);
-      };
-    } else {
-      timeoutId = window.setTimeout(() => {
-        initWebSocket();
-      }, 3000);
-      return () => window.clearTimeout(timeoutId);
-    }
+    ws.onmessage = ({ data }) => {
+      try {
+        const payload = JSON.parse(data.toString()) as { type: string; seatId?: unknown; status?: unknown };
+        const seatId = payload.seatId;
+        const status = payload.status;
+        if (
+          payload.type === 'seat-update' &&
+          typeof seatId === 'string' &&
+          (status === 'available' || status === 'reserved' || status === 'sold' || status === 'held')
+        ) {
+          setLiveStatusMap((prev) => ({ ...prev, [seatId]: status }));
+          setUpdatedSeatIds((current) => Array.from(new Set<string>([seatId, ...current])));
+          if (selectedIdsRef.current.includes(seatId) && status !== 'available') {
+            setSelectedIds((current) => current.filter((id) => id !== seatId));
+            showToast(`${seatId} is no longer available. Removed from selection.`, 'warning');
+          }
+        }
+      } catch {
+        // ignore invalid payload
+      }
+    };
+
+    ws.onerror = () => {
+      showToast('Live updates connection failed.', 'error');
+    };
+
+    ws.onclose = () => {
+      setWsStatus('closed');
+      showToast('Live updates disconnected.', 'info');
+      if (liveUpdatesEnabled) {
+        reconnectTimer = window.setTimeout(() => setReconnectAttempt((count) => count + 1), 3000);
+      }
+    };
+
+    return () => {
+      ws.close();
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    };
   }, [liveUpdatesEnabled, reconnectAttempt, showToast]);
 
   useEffect(() => {
@@ -399,7 +202,7 @@ function App() {
       showToast(`Could not find ${count} adjacent seats.`, 'warning');
       return null;
     },
-    [sections, selectedIds, showToast],
+    [sections, selectedIds, showToast, liveStatusMap],
   );
 
   const handleFindAdjacent = useCallback(() => {
@@ -445,17 +248,14 @@ function App() {
       if (direction === 'ArrowDown') nextRow += 1;
       if (direction === 'ArrowUp') nextRow -= 1;
 
-      const wrapRow = (() => {
-        if (nextNumber < 1) {
-          nextRow -= 1;
-          nextNumber = section.seatsPerRow;
-        }
-        if (nextNumber > section.seatsPerRow) {
-          nextRow += 1;
-          nextNumber = 1;
-        }
-        return nextRow;
-      })();
+      if (nextNumber < 1) {
+        nextRow -= 1;
+        nextNumber = section.seatsPerRow;
+      }
+      if (nextNumber > section.seatsPerRow) {
+        nextRow += 1;
+        nextNumber = 1;
+      }
 
       if (nextNumber < 1 || nextNumber > section.seatsPerRow || nextRow < 1 || nextRow > section.rows) return;
 
@@ -476,15 +276,12 @@ function App() {
         x: dragRef.current.offsetX + deltaX,
         y: dragRef.current.offsetY + deltaY,
       };
-      if (animationFrameRef.current === null) {
-        animationFrameRef.current = requestAnimationFrame(() => {
-          setViewport(viewportRef.current);
-          animationFrameRef.current = null;
-        });
-      }
+      applyViewportTransform();
     },
-    [],
+    [applyViewportTransform],
   );
+
+
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -492,8 +289,8 @@ function App() {
       active: true,
       startX: event.clientX,
       startY: event.clientY,
-      offsetX: viewport.x,
-      offsetY: viewport.y,
+      offsetX: viewportRef.current.x,
+      offsetY: viewportRef.current.y,
     };
   };
 
@@ -513,7 +310,7 @@ function App() {
     viewportRef.current = { ...viewportRef.current, zoom: nextZoom };
     if (animationFrameRef.current === null) {
       animationFrameRef.current = requestAnimationFrame(() => {
-        setViewport(viewportRef.current);
+        applyViewportTransform();
         animationFrameRef.current = null;
       });
     }
@@ -529,7 +326,7 @@ function App() {
     if (event.touches.length === 2) {
       pinchRef.current = {
         startDistance: getTouchDistance(event.touches),
-        startZoom: viewport.zoom,
+        startZoom: viewportRef.current.zoom,
       };
       dragRef.current = null;
       return;
@@ -539,8 +336,8 @@ function App() {
       active: true,
       startX: touch.clientX,
       startY: touch.clientY,
-      offsetX: viewport.x,
-      offsetY: viewport.y,
+      offsetX: viewportRef.current.x,
+      offsetY: viewportRef.current.y,
     };
   };
 
@@ -552,7 +349,7 @@ function App() {
       viewportRef.current = { ...viewportRef.current, zoom: newZoom };
       if (animationFrameRef.current === null) {
         animationFrameRef.current = requestAnimationFrame(() => {
-          setViewport(viewportRef.current);
+          applyViewportTransform();
           animationFrameRef.current = null;
         });
       }
@@ -569,13 +366,6 @@ function App() {
     pinchRef.current = null;
   };
 
-  useEffect(() => {
-    if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(() => {
-        document.body.style.willChange = 'auto';
-      });
-    }
-  }, []);
   return (
     <div className="app-shell">
       {isLoading && <div className="loading-overlay"><div className="loading-spinner"></div></div>}
@@ -621,8 +411,16 @@ function App() {
       <main className="main-grid">
         <section className="map-panel">
           <div className="map-topbar">
-            <div>
-              <span className="map-note">Tap and drag to pan, pinch to zoom on mobile.</span>
+            <div className="section-tabs">
+              {['A', 'B', 'C'].map((id) => (
+                <button
+                  key={id}
+                  className={`tab-btn ${activeSectionId === id ? 'tab-active' : ''}`}
+                  onClick={() => setActiveSectionId(id)}
+                >
+                  Section {id}
+                </button>
+              ))}
             </div>
             <div className="adjacent-controls">
               <label>
@@ -652,17 +450,16 @@ function App() {
             style={{ touchAction: 'none' }}
           >
             <div
-              className="sections-map"
-              style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }}
+              ref={mapContainerRef}
+              className="sections-map single-section"
             >
-              <SeatMap
-                sections={sections}
+               <SeatMap
+                sections={selectedSections}
                 selectedIdSet={selectedIdSet}
                 liveStatusMap={liveStatusMap}
                 heatMapEnabled={heatMapEnabled}
                 updatedSeatIdSet={updatedSeatIdSet}
                 onToggle={handleToggle}
-                onArrowNavigate={moveFocus}
                 onHighlight={setHighlightedSeat}
               />
             </div>

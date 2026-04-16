@@ -34,3 +34,10 @@ export type SeatData = {
   width: number;
   height: number;
 };
+
+export type SectionView = {
+  section: VenueSection;
+  seats: SeatData[];
+  width: number;
+  height: number;
+};
