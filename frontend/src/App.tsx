@@ -202,6 +202,8 @@ function App() {
   const selectedIdsRef = useRef(selectedIds);
   const dragRef = useRef<{ active: boolean; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
   const pinchRef = useRef<{ startDistance: number; startZoom: number } | null>(null);
+  const viewportRef = useRef(viewport);
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     saveSelection(selectedIds);
@@ -426,11 +428,17 @@ function App() {
       if (!dragRef.current?.active) return;
       const deltaX = clientX - dragRef.current.startX;
       const deltaY = clientY - dragRef.current.startY;
-      setViewport((current) => ({
-        ...current,
-        x: dragRef.current!.offsetX + deltaX,
-        y: dragRef.current!.offsetY + deltaY,
-      }));
+      viewportRef.current = {
+        ...viewportRef.current,
+        x: dragRef.current.offsetX + deltaX,
+        y: dragRef.current.offsetY + deltaY,
+      };
+      if (animationFrameRef.current === null) {
+        animationFrameRef.current = requestAnimationFrame(() => {
+          setViewport(viewportRef.current);
+          animationFrameRef.current = null;
+        });
+      }
     },
     [],
   );
@@ -485,10 +493,14 @@ function App() {
     if (event.touches.length === 2 && pinchRef.current) {
       const distance = getTouchDistance(event.touches);
       const scale = distance / pinchRef.current.startDistance;
-      setViewport((current) => ({
-        ...current,
-        zoom: clamp(pinchRef.current!.startZoom * scale, 0.8, 2.5),
-      }));
+      const newZoom = clamp(pinchRef.current.startZoom * scale, 0.8, 2.5);
+      viewportRef.current = { ...viewportRef.current, zoom: newZoom };
+      if (animationFrameRef.current === null) {
+        animationFrameRef.current = requestAnimationFrame(() => {
+          setViewport(viewportRef.current);
+          animationFrameRef.current = null;
+        });
+      }
       return;
     }
     if (event.touches.length === 1 && dragRef.current?.active) {
