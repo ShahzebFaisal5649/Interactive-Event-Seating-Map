@@ -1,0 +1,5 @@
+{
+  "buildCommand": "pnpm --filter frontend build",
+  "outputDirectory": "frontend/dist",
+  "framework": "vite"
+}
