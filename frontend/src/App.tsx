@@ -256,6 +256,7 @@ function App() {
     [selectedIds, seatById],
   );
 
+  const totalSeatCount = allSeats.length;
   const subtotal = useMemo(
     () => selectedSeats.reduce((sum, seat) => sum + seat.price, 0),
     [selectedSeats],
@@ -475,6 +476,18 @@ function App() {
     if (dragRef.current) dragRef.current.active = false;
   };
 
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const factor = event.deltaY > 0 ? 0.92 : 1.08;
+    const nextZoom = clamp(viewportRef.current.zoom * factor, 0.8, 2.5);
+    viewportRef.current = { ...viewportRef.current, zoom: nextZoom };
+    if (animationFrameRef.current === null) {
+      animationFrameRef.current = requestAnimationFrame(() => {
+        setViewport(viewportRef.current);
+        animationFrameRef.current = null;
+      });
+    }
+  };
 
   const getTouchDistance = (touches: React.TouchList) => {
     if (touches.length < 2) return 0;
@@ -544,6 +557,8 @@ function App() {
           <p className="eyebrow">Event seating selection</p>
           <h1>Interactive venue map</h1>
           <p>Choose up to <strong>8 seats</strong> from any section. Use hover or keyboard navigation to explore.</p>
+          <p>{totalSeatCount.toLocaleString()} seats available across {sections.length} sections (A, B, C).</p>
+          <p>Each section contains {Math.floor(totalSeatCount / sections.length).toLocaleString()} seats for a total of 15,000 seats.</p>
         </div>
 
         <div className="controls">
@@ -596,6 +611,7 @@ function App() {
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
+            onWheel={handleWheel}
             style={{ touchAction: 'none' }}
           >
             <div
