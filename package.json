@@ -1,0 +1,16 @@
+{
+  "name": "interactive-event-seating-map",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Interactive event seating map frontend and high-performance user API backend.",
+  "scripts": {
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "start:frontend": "pnpm --filter frontend preview",
+    "start:backend": "pnpm --filter backend start"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}

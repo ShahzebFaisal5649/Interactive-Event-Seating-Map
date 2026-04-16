@@ -1,0 +1,41 @@
+{
+  "map": {
+    "width": 560,
+    "height": 1040
+  },
+  "sections": [
+    {
+      "id": "A",
+      "label": "Orchestra Center",
+      "x": 0,
+      "y": 0,
+      "rows": 100,
+      "seatsPerRow": 50,
+      "rowSpacing": 10,
+      "seatSpacing": 10,
+      "priceBase": 260
+    },
+    {
+      "id": "B",
+      "label": "Orchestra Left",
+      "x": 0,
+      "y": 0,
+      "rows": 100,
+      "seatsPerRow": 50,
+      "rowSpacing": 10,
+      "seatSpacing": 10,
+      "priceBase": 220
+    },
+    {
+      "id": "C",
+      "label": "Orchestra Right",
+      "x": 0,
+      "y": 0,
+      "rows": 100,
+      "seatsPerRow": 50,
+      "rowSpacing": 10,
+      "seatSpacing": 10,
+      "priceBase": 190
+    }
+  ]
+}
